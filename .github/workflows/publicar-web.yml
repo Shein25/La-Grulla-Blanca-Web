@@ -1,79 +1,72 @@
-name: Publicar La Grulla Blanca Web
+name: Preparar juego compilado para GitHub Pages
 
 on:
   push:
     branches: [main]
     paths:
       - WEB_GRULLA_PUBLICAR_EN_GITHUB.zip
+      - .github/workflows/publicar-web.yml
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: github-pages-la-grulla
-  cancel-in-progress: true
+  group: preparar-grulla-web
+  cancel-in-progress: false
 
 jobs:
-  verificar:
-    name: Verificar y preparar web R2-R18
+  verificar-y-publicar:
+    name: Verificar 331 archivos y guardar juego web en main
     runs-on: ubuntu-latest
     steps:
-      - name: Obtener archivos de publicación
+      - name: Obtener repositorio publico
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
-      - name: Extraer solo la distribución compilada
+      - name: Extraer ZIP original en carpeta temporal
         run: |
           set -euo pipefail
-          test -f WEB_GRULLA_PUBLICAR_EN_GITHUB.zip || { echo "::error::Falta WEB_GRULLA_PUBLICAR_EN_GITHUB.zip en la raíz"; exit 1; }
+          test -f WEB_GRULLA_PUBLICAR_EN_GITHUB.zip
           mkdir -p "$RUNNER_TEMP/grulla-web"
           unzip -q WEB_GRULLA_PUBLICAR_EN_GITHUB.zip -d "$RUNNER_TEMP/grulla-web"
 
-      - name: Verificar integridad y ausencia de archivos de desarrollo
+      - name: Verificar integridad y seguridad basica de distribucion
         run: |
           python3 - <<'PY'
-          import hashlib,json,os
+          import hashlib, json, os
           from pathlib import Path
-          root=Path(os.environ['RUNNER_TEMP'])/'grulla-web'
-          manifest=json.loads((root/'MANIFIESTO_SHA256.json').read_text(encoding='utf-8'))
-          assert manifest['schema']=='LGB_MODULAR_HASHES_V1'
-          files=manifest['files']
-          assert len(files)==331, f'Se esperaban 331 archivos: {len(files)}'
-          for name,expected in files.items():
-              candidate=(root/name).resolve()
-              assert candidate.is_relative_to(root.resolve()), name
-              assert candidate.is_file(), name
-              assert hashlib.sha256(candidate.read_bytes()).hexdigest()==expected, name
-          assert (root/'index.html').is_file()
-          runtime=json.loads((root/'runtime-manifest.json').read_text(encoding='utf-8'))
-          assert runtime['schema']=='LGB_MODULAR_RUNTIME_V1'
-          assert runtime['worldActivation'] is False
-          assert not (root/'node_modules').exists()
-          assert not (root/'.git').exists()
-          (root/'.nojekyll').touch(exist_ok=True)
-          print('PASS: 331 archivos verificables, aplicacion modular R2-R18 lista')
+          root = (Path(os.environ["RUNNER_TEMP"])/"grulla-web").resolve()
+          manifest = json.loads((root/"MANIFIESTO_SHA256.json").read_text(encoding="utf-8"))
+          assert manifest["schema"] == "LGB_MODULAR_HASHES_V1"
+          expected = manifest["files"]
+          assert len(expected) == 331, f"Conteo inesperado: {len(expected)}"
+          for relative, sha in expected.items():
+              path = (root/relative).resolve()
+              assert path.is_relative_to(root), relative
+              assert path.is_file(), relative
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == sha, relative
+          runtime = json.loads((root/"runtime-manifest.json").read_text(encoding="utf-8"))
+          assert runtime["schema"] == "LGB_MODULAR_RUNTIME_V1"
+          assert runtime["worldActivation"] is False
+          assert (root/"index.html").is_file()
+          for unwanted in (".git", "node_modules", "project", "tests", "sources", "backups", ".env"):
+              assert not (root/unwanted).exists(), unwanted
+          print("PASS: 331/331 distribucion modular R2-R18")
           PY
 
-      - name: Subir exclusivamente los archivos del sitio
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ${{ runner.temp }}/grulla-web
-
-  publicar:
-    name: Activar GitHub Pages y desplegar
-    needs: verificar
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - name: Configurar Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - name: Publicar web
-        id: deploy
-        uses: actions/deploy-pages@v4
+      - name: Instalar solo los archivos web en raiz publica
+        run: |
+          set -euo pipefail
+          cp -a "$RUNNER_TEMP/grulla-web"/. .
+          touch .nojekyll
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- .nojekyll index.html runtime-manifest.json MANIFIESTO_SHA256.json assets data rituals
+          if git diff --cached --quiet; then
+            echo "El sitio ya estaba actualizado."
+          else
+            git commit -m "Publica juego modular R2-R18 verificado para Pages"
+            git push origin HEAD:main
+          fi
