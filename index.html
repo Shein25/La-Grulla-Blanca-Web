@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAMPAÑA FUNCIONAL EXPERIMENTAL — La Grulla Blanca — MUD xianxia</title>
+<link rel="stylesheet" href="./assets/theme-0.css">
+</head>
+<body>
+<header>
+  <span class="marca">白鶴 · LA GRULLA BLANCA</span>
+  <span id="barra">—</span>
+  <span id="avisoSave"></span>
+  <nav id="acciones">
+    <button type="button" id="btnMapa" aria-haspopup="dialog" aria-controls="atlas">MAPA</button>
+    <button type="button" id="btnTecnicas" aria-haspopup="dialog" aria-controls="meridianos">TÉCNICAS</button>
+    <button type="button" id="btnMisiones" aria-haspopup="dialog" aria-controls="registroMisiones">MISIONES<span id="misBadge" class="mis-punto" hidden></span></button>
+    <button type="button" id="btnOficios" aria-haspopup="dialog" aria-controls="oficios">OFICIOS</button>
+    <button type="button" id="btnCultivo" aria-haspopup="dialog" aria-controls="cultivo">CULTIVO</button>
+    <button type="button" id="btnGuardar" title="guardar en un slot">GUARDAR</button>
+    <button type="button" id="btnCargar" title="cargar una partida">CARGAR</button>
+    <button type="button" id="btnNueva" title="empezar de nuevo">NUEVA</button>
+  </nav>
+</header>
+<div id="zona">
+  <main id="terminal"><div id="contenido"></div></main>
+  <aside id="minimapa">
+    <div id="vitales"></div>
+    <div id="mapaSala">—</div>
+    <div id="panelInfo"></div>
+  </aside>
+  <section id="combateUI" hidden aria-label="Combate">
+    <div class="combate-ventana">
+      <div class="combate-cab">
+        <span class="combate-cab-titulo" id="cbTitulo">COMBATE</span>
+        <span class="combate-cab-ronda" id="cbRonda"></span>
+      </div>
+      <div class="combate-cuerpo">
+        <div class="combate-layout">
+          <section class="combate-columna combate-columna-actores" aria-label="Combatientes">
+            <div id="cbJugador" class="combate-jugador"></div>
+            <div class="combate-seccion-etiqueta">OBJETIVOS</div>
+            <div id="cbCombatientes" class="combate-combatientes"></div>
+            <div id="cbSueltos" class="combate-sueltos"></div>
+          </section>
+          <section class="combate-columna combate-columna-registro" aria-label="Desarrollo del combate">
+            <div id="cbIntencion" class="combate-intencion"></div>
+            <div class="combate-registro-caja">
+              <div class="combate-registro-titulo">REGISTRO DE COMBATE</div>
+              <div id="cbLog" class="combate-registro" role="log" aria-live="polite"></div>
+            </div>
+          </section>
+          <aside class="combate-columna combate-columna-contexto" aria-label="Panel contextual">
+            <div id="cbDrawer" class="combate-drawer"></div>
+          </aside>
+        </div>
+        <div id="cbAcciones" class="combate-acciones-fila"></div>
+        <div id="cbResumenPreparadas" class="combate-resumen-pie"></div>
+      </div>
+    </div>
+    <div id="cbResultado" class="combate-resultado-overlay" hidden>
+      <section class="combate-resultado" id="cbResultadoPanel"></section>
+    </div>
+  </section>
+</div>
+<form id="form" autocomplete="off" inert aria-busy="true">
+  <span class="simbolo">›</span>
+  <input id="entrada" spellcheck="false" autofocus placeholder="escribe un comando… (AYUDA)">
+</form>
+<dialog id="atlas" aria-labelledby="atlasTitulo">
+  <div class="atlas-marco">
+    <div class="atlas-cabecera">
+      <div><h2 id="atlasTitulo">白鶴 · Atlas de Jade</h2><p class="atlas-sub" id="atlasResumen">La montaña se revela con tus pasos.</p></div>
+      <button class="chip" type="button" id="atlasCerrar" autofocus>CERRAR · Esc</button>
+    </div>
+    <nav class="atlas-tabs" aria-label="Secciones del atlas">
+      <button class="chip" type="button" id="atlasTabMapa">MAPA</button>
+      <button class="chip" type="button" id="atlasTabLugares">LUGARES</button>
+      <button class="chip" type="button" id="atlasTabPersonas">PERSONAS</button>
+      <button class="chip" type="button" id="atlasTabBestiario">BESTIARIO</button>
+    </nav>
+    <div class="atlas-cuerpo">
+      <div class="atlas-izquierda">
+        <label for="atlasBusqueda" class="atlas-sub atlas-etiqueta-oculta">Buscar en los registros conocidos</label>
+        <input type="search" id="atlasBusqueda" placeholder="Nombre de lugar, persona o criatura…">
+        <div id="atlasNivel" class="atlas-nivel" hidden>
+          <div class="atlas-nivel-texto">
+            <nav id="atlasMigas" class="atlas-migas" aria-label="Qué parte del Atlas estás consultando"></nav>
+            <strong id="atlasNivelNombre" class="atlas-nivel-nombre">Capa vertical</strong>
+            <span id="atlasNivelEstado" class="atlas-nivel-estado"></span>
+          </div>
+          <div class="atlas-nivel-controles">
+            <label for="atlasArea" class="atlas-etiqueta-oculta">Área que consultas</label>
+            <select id="atlasArea" hidden></select>
+            <label for="atlasCapa" class="atlas-etiqueta-oculta">Capa conocida que consultas</label>
+            <select id="atlasCapa" hidden></select>
+            <button id="atlasCentrar" class="chip atlas-nivel-centro" type="button" title="Volver a tu área, tu capa vertical y tu sala">MI ZONA</button>
+          </div>
+        </div>
+        <div id="atlasVista">
+          <svg id="mapaSvg" viewBox="-10 -105 350 430" xmlns="http://www.w3.org/2000/svg" aria-label="Mapa de las rutas descubiertas"></svg>
+          <div id="atlasLista"></div>
+          <div id="atlasRosa" aria-hidden="true">
+            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="32" cy="32" r="27" class="rosa-aro"/>
+              <path d="M32 7 L37 32 L32 57 L27 32 Z" class="rosa-aguja-ns"/>
+              <path d="M7 32 L32 27 L57 32 L32 37 Z" class="rosa-aguja-eo"/>
+              <circle cx="32" cy="32" r="3.2" class="rosa-nucleo"/>
+              <text x="32" y="12" class="rosa-etq">N</text>
+              <text x="32" y="58.5" class="rosa-etq">S</text>
+              <text x="9.5" y="35.5" class="rosa-etq">O</text>
+              <text x="54.5" y="35.5" class="rosa-etq">E</text>
+            </svg>
+            <span id="atlasCoord">N0 · E0</span>
+          </div>
+          <div id="atlasZoomCtrl" role="group" aria-label="Zoom del mapa">
+            <button type="button" id="atlasZoomMas" aria-label="Acercar mapa" title="Acercar (+)">+</button>
+            <button type="button" id="atlasZoomMenos" aria-label="Alejar mapa" title="Alejar (−)">−</button>
+          </div>
+        </div>
+        <p class="atlas-sub">● Aquí · ○ Explorado · ◌ Sin explorar · ☾ Puedes dormir · ↑/↓ Cambiar nivel · ➤ Ir a otra área · Consultar el Atlas no mueve a tu personaje · Arrastra o usa la ruedita para mover el mapa</p>
+      </div>
+      <section id="atlasDetalle" aria-label="Ficha seleccionada" aria-live="polite"></section>
+    </div>
+    <div class="atlas-pie">Selecciona un registro para consultarlo. Los avistamientos son recuerdos; el mundo puede haber cambiado. Consultar no consume turnos.</div>
+  </div>
+</dialog>
+<dialog id="registroMisiones" aria-labelledby="misTitulo">
+  <div class="mis-marco">
+    <div class="atlas-cabecera">
+      <div><h2 id="misTitulo">命 · Registro del Destino</h2><p class="atlas-sub" id="misResumen">La montaña sólo escribe aquello que has llegado a conocer.</p></div>
+      <div><button class="chip" type="button" id="misContraer">CONTRAER TODO</button> <button class="chip" type="button" id="misCerrar" autofocus>CERRAR · Esc</button></div>
+    </div>
+    <div id="misContenido" aria-live="polite"></div>
+    <div class="atlas-pie">Los rumores se convierten en encargos al encontrar su origen. Abre una entrada para consultar su historia, objetivo, progreso y pistas. Consultar no consume turnos.</div>
+  </div>
+</dialog>
+<dialog id="oficios" aria-labelledby="ofiTitulo">
+  <div class="ofi-marco">
+    <div class="atlas-cabecera">
+      <div><h2 id="ofiTitulo">百工 · Pabellón de los Cien Oficios</h2><p class="atlas-sub" id="ofiResumen">Las manos también cultivan.</p></div>
+      <button class="chip" type="button" id="ofiCerrar" autofocus>CERRAR · Esc</button>
+    </div>
+    <div class="ofi-cuerpo">
+      <nav id="ofiLista" aria-label="Profesiones"></nav>
+      <section id="ofiDetalle" aria-label="Detalle del oficio" aria-live="polite"></section>
+    </div>
+    <div id="ofiAviso" role="status" aria-live="polite"></div>
+    <div class="atlas-pie">Los materiales proceden de hallazgos reales. Elaborar exige una estación adecuada y consume los ingredientes sólo al completar los tres pulsos.</div>
+  </div>
+</dialog>
+<dialog id="interaccionOficio" aria-labelledby="interaccionTitulo">
+  <div class="ofi-marco">
+    <div class="atlas-cabecera">
+      <div><h2 id="interaccionTitulo">Interacción de oficio</h2><p class="atlas-sub" id="interaccionResumen">Trabaja sobre lo que tienes delante.</p></div>
+      <button class="chip" type="button" id="interaccionCerrar" autofocus>CERRAR · Esc</button>
+    </div>
+    <section id="interaccionDetalle" aria-live="polite"></section>
+    <div id="interaccionAviso" role="status" aria-live="polite"></div>
+  </div>
+</dialog>
+<noscript>Este juego necesita JavaScript activado.</noscript>
+<dialog id="cultivo" aria-labelledby="cultTitulo">
+  <div class="atlas-marco">
+    <div class="atlas-cabecera">
+      <div><h2 id="cultTitulo">修 · Registro de Cultivo</h2><p class="atlas-sub" id="cultResumen"></p></div>
+      <button class="chip" type="button" id="cultCerrar" autofocus>CERRAR · Esc</button>
+    </div>
+    <div class="mer-tabs" role="tablist" aria-label="Secciones del registro de cultivo">
+      <button class="mer-tab" type="button" id="cultTabEstado" role="tab" aria-selected="true">ESTADO</button>
+      <button class="mer-tab" type="button" id="cultTabCamino" role="tab" aria-selected="false">CAMINO</button>
+      <button class="mer-tab" type="button" id="cultTabArcos" role="tab" aria-selected="false">ARCOS</button>
+    </div>
+    <div class="cult-cuerpo" id="cultContenido" aria-live="polite"></div>
+    <div class="atlas-pie">El cultivo se practica en el terminal (MEDITAR, estudiar, combatir); esta ventana sólo lo refleja. Consultar no consume turnos.</div>
+  </div>
+</dialog>
+<dialog id="meridianos" aria-labelledby="merTitulo">
+  <div class="atlas-marco">
+    <div class="atlas-cabecera">
+      <div><h2 id="merTitulo">脈 · Mapa de Meridianos</h2><p class="atlas-sub" id="merResumen"></p><div id="merPuntos"></div></div>
+      <button class="chip" type="button" id="merCerrar" autofocus>CERRAR · Esc</button>
+    </div>
+    <div class="mer-tabs" role="tablist" aria-label="Secciones del mapa de meridianos">
+      <button class="mer-tab" type="button" id="merTabTecnicas" role="tab" aria-selected="true">TÉCNICAS</button>
+      <button class="mer-tab" type="button" id="merTabBuilds" role="tab" aria-selected="false">BUILDS</button>
+    </div>
+    <div class="mer-cuerpo">
+      <nav class="mer-col mer-catalogo" aria-label="Técnicas descubiertas">
+        <div class="mer-col-kicker" id="merKicker">TÉCNICAS DESCUBIERTAS</div>
+        <div id="merBuscador">
+          <label for="merBusqueda">Buscar técnica</label><input id="merBusqueda" type="search" placeholder="Nombre o elemento…">
+        </div>
+        <div id="merLista"></div>
+      </nav>
+      <section class="mer-col" id="merDetalle" aria-label="Información y comparación" aria-live="polite"></section>
+      <section class="mer-col" id="merArbol" aria-label="Ramas de la técnica"></section>
+    </div>
+    <div id="merAviso" role="status" aria-live="polite"></div>
+    <div class="atlas-pie">Cada tramo permite elegir uno de tres cauces por 1 punto universal. Puedes cambiarlo o retirar el punto en un lugar seguro. Consultar y comparar no consume turnos.</div>
+  </div>
+</dialog>
+
+<!-- Accepted campaign shell; the old composite numeric bootstrap is replaced by the V307 integration graph. -->
+
+<script type="module" src="./assets/entry.mjs"></script>
+</body>
+</html>

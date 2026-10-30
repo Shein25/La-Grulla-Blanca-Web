@@ -1,0 +1,43 @@
+(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory(require('./shared.js'));else root.ASTRA_A08_COMBAT=factory(root.ASTRA_A08_SHARED);})(globalThis,function(S){
+'use strict';const {fail,number,copy,freeze}=S;
+const clamp=(x,l,h)=>Math.max(l,Math.min(h,number(x,'CLAMP',{signed:true}))),round=x=>Math.floor(number(x,'ROUND')+0.5);
+const targetReceivers=new WeakMap();
+function issueTargetReceiver(port){if(typeof port?.quote!=='function'||typeof port?.commit!=='function')fail('R52_TARGET_RECEIVER_PORT');const cap=Object.freeze({});targetReceivers.set(cap,port);return cap;}
+function receiverQuote(cap){if(cap===undefined||cap===null)return null;const p=targetReceivers.get(cap);if(!p)fail('R52_FORGED_TARGET_RECEIVER');const q=p.quote();number(q.reserve,'TARGET_RESERVE');number(q.reductionPercent,'TARGET_REDUCTION');if(q.reductionPercent>100)fail('R52_TARGET_REDUCTION');return {...q,port:p};}
+// Native V284 algebra; no E1 calls, no stage scalar or implicit elemental resistance.
+function direct(o){if(!Array.isArray(o.portions)||!o.portions.length)fail('A08_MISSING_PORTIONS');let raw=0;
+ for(const p of o.portions){if(!Array.isArray(p.tags)||!p.tags.length||new Set(p.tags).size!==p.tags.length||p.tags.some(x=>typeof x!=='string'))fail('A08_PORTION_TAGS');
+  if(!Array.isArray(p.percents))fail('A08_EXPLICIT_PERCENT_POOL');const pct=p.percents.reduce((a,b)=>a+number(b,'PCT',{signed:true}),0);
+  let sub=Math.max(0,(number(p.base,'BASE')+number(p.flat,'FLAT',{signed:true}))*Math.max(0,1+pct/100));
+  if(o.critical)sub*=number(o.critMultiplier,'CRITICAL');const received=[...new Set([...p.tags,'GLOBAL'])].reduce((a,t)=>a+number(o.received[t]??0,'RECEIVED',{signed:true}),0);raw+=sub*Math.max(0,1+received/100);}
+ if(o.transformRaw!==undefined){if(typeof o.transformRaw!=='function')fail('A08_RAW_PORT_REQUIRED');const transformed=number(o.transformRaw(raw),'TRANSFORMED_RAW');if(transformed>raw)fail('A08_RAW_REDUCTION_CANNOT_MINT_DAMAGE');raw=transformed;}
+ const receiver=receiverQuote(o.receiver);if(receiver)raw*=1-receiver.reductionPercent/100;
+ const def=Math.max(0,Math.max(0,number(o.defense,'DEF')-number(o.shred,'SHRED'))*(1-clamp(o.percentPen,0,100)/100)-number(o.flatPen,'FLAT_PEN'));
+ const afterDef=round(Math.max(0,raw-def)),ordinaryAbsorbed=Math.min(afterDef,number(o.absorption,'ABSORPTION')),nativeAbsorbed=receiver&&!o.receiverPreview?Math.min(afterDef-ordinaryAbsorbed,receiver.reserve):0,absorbed=ordinaryAbsorbed+nativeAbsorbed,hpDamage=afterDef-absorbed,actual=Math.min(number(o.currentHP,'HP'),hpDamage);const nativeEffect=receiver&&!o.receiverPreview?receiver.port.commit({absorbed:nativeAbsorbed,connected:true,hpBefore:o.currentHP,hpAfter:o.currentHP-actual,critical:!!o.critical}):null;
+ return freeze({kind:'DIRECT',damageBeforeDefense:raw,effectiveDefense:def,damageAfterDefense:afterDef,absorbed,hpDamage,actualHPDamage:actual,hpAfter:o.currentHP-actual,absorptionAfter:o.absorption-ordinaryAbsorbed,killed:o.currentHP>0&&actual===o.currentHP,...(nativeEffect?{nativeTargetEffect:nativeEffect}:{})});
+}
+function dot({potency,absorption,currentHP}){const amount=round(potency),absorbed=Math.min(amount,number(absorption,'ABSORPTION')),actual=Math.min(number(currentHP,'HP'),amount-absorbed);return freeze({kind:'DOT',effectiveDefense:0,critical:false,damageAfterDefense:amount,absorbed,actualHPDamage:actual,hpAfter:currentHP-actual,absorptionAfter:absorption-absorbed,killed:currentHP>0&&actual===currentHP});}
+const hit=(p,e)=>clamp(number(p,'PRECISION',{signed:true})-number(e,'EVASION',{signed:true}),5,100);
+const control=(power,ctrl,tenacity)=>clamp(number(power,'APPLICATION')+number(ctrl,'CONTROL',{signed:true})-number(tenacity,'TENACITY',{signed:true}),5,100);
+function createResolver({resolveActor,resolveAction,commit,rng}){const receipts=new WeakMap(),seen=new Set();let busy=false;
+ function execute(actorCap,targetCap,actionCap){if(busy)fail('A08_COMBAT_REENTRANT');busy=true;let rollback=null;const checkpoint=rng.capture();
+  try{const a=resolveActor(actorCap),t=resolveActor(targetCap),act=resolveAction(actionCap);if(!a?.complete||!t?.complete)fail('BLOCKED_SOURCE_ACTOR_FIELDS');if(!act?.nativeAuthorized)fail('BLOCKED_SOURCE_PHYSICAL_ACTION');
+   if(a.resources.HP_CURRENT<=0||t.resources.HP_CURRENT<=0)fail('A08_TERMINAL_ACTOR');if(seen.has(act.actionId))fail('A08_ACTION_REPLAY');if(a.id===t.id)fail('A08_SELF_TARGET');
+   const cost=number(act.costQI,'QI_COST');if(a.resources.QI_CURRENT===null&&cost!==0)fail('A08_MONSTER_QI_NONE');if(a.resources.QI_CURRENT!==null&&a.resources.QI_CURRENT<cost)fail('A08_QI_INSUFFICIENT');
+   const hitRoll=rng.next()*100,connected=hitRoll<hit(a.stats.PRECISION.value,t.stats.EVASION.value);let result,critical=false;
+   if(connected){critical=rng.next()*100<clamp(a.stats.CRIT_CHANCE.value+number(act.critBonus,'ACTION_CRIT',{signed:true}),0,100);
+    result=direct({portions:act.portions,received:act.received,critical,critMultiplier:a.stats.CRIT_DAMAGE.value,defense:t.stats.DEF.value,shred:act.shred,percentPen:a.stats.PERCENT_PENETRATION.value+act.percentPen,flatPen:a.stats.FLAT_PENETRATION.value+act.flatPen,absorption:t.absorption,currentHP:t.resources.HP_CURRENT});}
+   else result=freeze({kind:'DIRECT',actualHPDamage:0,hpAfter:t.resources.HP_CURRENT,absorptionAfter:t.absorption,killed:false});
+   const proposal=freeze({actionId:act.actionId,actorId:a.id,targetId:t.id,actorRevision:a.revision,targetRevision:t.revision,paidQI:cost,hit:connected,critical,result});
+   rollback=commit(proposal,actorCap,targetCap,actionCap);if(typeof rollback!=='function')fail('A08_ROLLBACK_PORT_REQUIRED');seen.add(act.actionId);
+   const cap=Object.freeze({});receipts.set(cap,proposal);return cap;
+  }catch(e){rollback?.();rng.restore(checkpoint);throw e;}finally{busy=false;}}
+ return Object.freeze({execute,receipt:cap=>{const p=receipts.get(cap);if(!p)fail('A08_FORGED_COMBAT_RECEIPT');return freeze(copy(p));}});
+}
+// F3's explicit absorption-melt component commits Life without consuming the
+// CURRENT reserve. This is source-specific algebra, never a public grant port.
+function sourceLife({source,requested,currentHP,absorption}){if(source!=='AGUJA_MELTED_ABS_BYPASS')fail('A08_UNKNOWN_LIFE_BYPASS_SOURCE');number(requested,'LIFE_BYPASS');number(currentHP,'HP');number(absorption,'ABSORPTION');if(requested>14)fail('A08_AGUJA_BYPASS_CAP');const actual=Math.min(requested,currentHP);return freeze({kind:'SOURCE_LIFE',source,actualHPDamage:actual,hpAfter:currentHP-actual,absorptionAfter:absorption,killed:currentHP>0&&actual===currentHP,critical:false,effectiveDefense:0});}
+function ownedAbsorption({ownerId,pools,amount,respectCaps}){if(typeof ownerId!=='string'||!Array.isArray(pools)||typeof respectCaps!=='boolean')fail('A08_OWNED_POOL_SCOPE');number(amount,'POOL_DAMAGE');const usedIds=new Set(),owned=copy(pools);for(const p of owned){if(p.ownerId!==ownerId||typeof p.poolId!=='string'||usedIds.has(p.poolId)||typeof p.source!=='string'||!Number.isSafeInteger(p.priority)||!Number.isSafeInteger(p.seq)||p.seq<0)fail('A08_OWNED_POOL_PROVENANCE');usedIds.add(p.poolId);number(p.reserve,'POOL_RESERVE');if(p.perHitCap!==null)number(p.perHitCap,'POOL_CAP');}owned.sort((a,b)=>b.priority-a.priority||a.seq-b.seq);let remaining=amount,absorbed=0;const consumption=[];for(const p of owned){const cap=respectCaps&&p.perHitCap!==null?Math.min(p.reserve,p.perHitCap):p.reserve,used=Math.min(remaining,cap);p.reserve-=used;remaining-=used;absorbed+=used;consumption.push({poolId:p.poolId,ownerId,source:p.source,seq:p.seq,amount:used});}return freeze({remaining,absorbed,pools:owned.filter(p=>p.reserve>1e-9),consumption});}
+function directOwned(o){const raw=direct({...o,absorption:0,receiverPreview:true}),a=ownedAbsorption({ownerId:o.ownerId,pools:o.pools,amount:raw.damageAfterDefense,respectCaps:true}),receiver=receiverQuote(o.receiver),nativeAbsorbed=receiver?Math.min(a.remaining,receiver.reserve):0,nativeEffect=receiver?receiver.port.commit({absorbed:nativeAbsorbed,connected:true,hpBefore:o.currentHP,hpAfter:Math.max(0,o.currentHP-(a.remaining-nativeAbsorbed)),critical:!!o.critical}):null,remaining=a.remaining-nativeAbsorbed,actual=Math.min(o.currentHP,remaining);return freeze({...raw,...(nativeEffect?{nativeTargetEffect:nativeEffect}:{}),absorbed:a.absorbed+nativeAbsorbed,hpDamage:remaining,actualHPDamage:actual,hpAfter:Math.max(0,o.currentHP-(a.remaining-nativeAbsorbed)),absorptionAfter:a.pools.reduce((n,p)=>n+p.reserve,0),poolsAfter:a.pools,poolConsumption:a.consumption,killed:o.currentHP>0&&actual===o.currentHP});}
+return Object.freeze({issueTargetReceiver,direct,dot,sourceLife,ownedAbsorption,directOwned,hit,control,createResolver});
+});

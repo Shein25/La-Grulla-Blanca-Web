@@ -1,0 +1,1 @@
+const ASTRA_A08_DATA=globalThis.LGB_BOOT_INPUTS.take("ASTRA_A08_DATA");

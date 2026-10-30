@@ -1,0 +1,1 @@
+const CAMPAIGN_FAUNA=globalThis.LGB_BOOT_INPUTS.take("CAMPAIGN_FAUNA");
